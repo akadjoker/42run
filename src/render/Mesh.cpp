@@ -479,7 +479,7 @@ void Surface::Init()
                 buffer->size  = e.size;
                 buffer->usage = e.usage;
                 buffer->name = "POSITION";
-            //    Log(1,"POSITION");
+                LogInfo("POSITION");
                 
                 AddBuffer(buffer);
             }
@@ -496,7 +496,7 @@ void Surface::Init()
                 buffer->size  = e.size;
                 buffer->usage = e.usage;
                 buffer->name = "TEXCOORD0";
-              //  Log(1,"TEXCOORD0");
+                LogInfo("TEXCOORD0");
                 AddBuffer(buffer);
 
                 

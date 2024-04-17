@@ -4,7 +4,7 @@
 
 #define MAX_TEXT_BUFFER_LENGTH              1024      
 
-#define GLSL(src) "#version 430\n" #src
+#define GLSL(src) "#version 330\n" #src
 
 
 const char *strprbrk(const char *s, const char *charset);

@@ -196,19 +196,17 @@ int main()
 
 
 
-  
+   
 {
      const char* vShader = GLSL(
 
     layout (location = 0) in vec3 aPos;
-    layout (location = 1) in vec3 aNormal;
-    layout (location = 2) in vec2 aTexCoords;
+    layout (location = 1) in vec2 aTexCoords;
 
 
 
 
-    out vec3 FragPos;
-    out vec3 Normal;
+  
     out vec2 TexCoords;
 
 
@@ -220,19 +218,12 @@ int main()
 
     void main()
     {
-        vec4 initPos = vec4(aPos, 1.0);
-
-        FragPos = vec3(model * initPos);
-        Normal = transpose(inverse(mat3(model))) * aNormal;
+      
         TexCoords = aTexCoords;
       
  
 
-         mat4 modelViewMatrix = view * model;
-         vec4 mvPosition =  modelViewMatrix * initPos;
-  
-
-        gl_Position = projection * view * model * initPos;
+        gl_Position = projection * view * model * vec4(aPos, 1.0);
     }
 
      );
@@ -242,60 +233,30 @@ int main()
 
         out vec4 FragColor; 
       
-        in    vec3 FragPos;
-        in    vec3 Normal;
+ 
         in    vec2 TexCoords;
 
 
         uniform sampler2D diffuseTexture;
 
 
-        uniform vec3 lightPos;
-        uniform vec3 viewPos;
-
 
          
 
 
 
-      
+       
 
 
         void main()
         {           
-            vec4 textureColor = texture(diffuseTexture, TexCoords);
-            vec3 normal = normalize(Normal);
-            vec3 lightColor = vec3(0.9);
-            // ambient
-            vec3 ambient = 0.9 * lightColor;
-            // diffuse
-            vec3 lightDir = normalize(lightPos - FragPos);
-            float diff = max(dot(lightDir, normal), 0.0);
-            vec3 diffuse = diff * lightColor;
-            // specular
-            vec3 viewDir = normalize(viewPos - FragPos);
-            vec3 reflectDir = reflect(-lightDir, normal);
-            float spec = 0.0;
-            vec3 halfwayDir = normalize(lightDir + viewDir);  
-            spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
-            vec3 specular = spec * lightColor;    
-            // calculate shadow
-            
-
-
-    
-          
-
-
-            vec3 lighting = (ambient +diffuse + specular);    
-
-
-            
-            FragColor =    vec4(lighting, 1.0) * textureColor;
+              vec4 textureColor = texture(diffuseTexture, TexCoords);
+           
+              FragColor =     textureColor;
 
         }    );
  
-
+ 
        Logger::Instance().Info("Creating 3D Shader");
       if (!meshShader.Create(vShader, fShader))
       {
@@ -319,7 +280,6 @@ int main()
       VertexFormat::Element elements[] =
     {
         VertexFormat::Element(VertexFormat::POSITION, 3),
-        VertexFormat::Element(VertexFormat::NORMAL, 3),
         VertexFormat::Element(VertexFormat::TEXCOORD0, 2),
 
          
@@ -343,9 +303,9 @@ MeshImporterH3D importer;
     // height.Load("assets/terrain-heightmap.bmp");
     
 
-  //  Mesh* cube =MeshBuilder::Instance().CreatePlane(VertexFormat(elements, 3), 5, 5, 50, 50);
+    Mesh* cube =MeshBuilder::Instance().CreatePlane(VertexFormat(elements, 2), 5, 5, 50, 50);
 
-    Mesh * cube = MeshBuilder::Instance().CreateCube(VertexFormat(elements, 3), 1,1,1);
+  //  Mesh * cube = MeshBuilder::Instance().CreateCube(VertexFormat(elements, 2), 1,1,1);
        
     cube->SetMaterial(0, new TextureMaterial(TextureManager::Instance().Load("dirt.png")));
     
@@ -486,8 +446,8 @@ MeshImporterH3D importer;
 
   
 
-        meshShader.SetFloat("lightPos", lightPosition.x, lightPosition.y, lightPosition.z);
-        meshShader.SetFloat("viewPos", cameraPosition.x, cameraPosition.y, cameraPosition.z);
+    //    meshShader.SetFloat("lightPos", lightPosition.x, lightPosition.y, lightPosition.z);
+    //    meshShader.SetFloat("viewPos", cameraPosition.x, cameraPosition.y, cameraPosition.z);
         meshShader.SetMatrix4("model", &model.c[0][0]);
         meshShader.SetMatrix4("view", &view.c[0][0]);
         meshShader.SetMatrix4("projection", &proj.c[0][0]);
