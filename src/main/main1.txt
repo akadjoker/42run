@@ -1,0 +1,730 @@
+
+#include "pch.h"
+#include "Deph.hpp"
+#include "Camera.hpp"
+
+struct Cascade
+{
+    float splitDepth;
+    Mat4 viewProjMatrix;
+
+};
+
+  
+ int screenWidth = 1024 ;
+ int screenHeight = 768 ;
+
+Camera camera(Vec3(-20.0f, 10.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
+float lastX = screenWidth / 2.0f;
+float lastY = screenHeight / 2.0f;
+float mouseDeltaX = 0.0f;
+float mouseDeltaY = 0.0f;
+bool firstMouse = true;
+bool IsMouseDown = false;
+
+CascadeShadow depthBuffer;
+  
+const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
+const int SHADOW_MAP_CASCADE_COUNT = 4;
+Cascade cascades[SHADOW_MAP_CASCADE_COUNT];
+#define MAX_TEXT_BUFFER_LENGTH              512 
+
+ const char *TextFormat(const char *text, ...)
+{
+
+    #define MAX_TEXTFORMAT_BUFFERS 4        // Maximum number of static buffers for text formatting
+    static char buffers[MAX_TEXTFORMAT_BUFFERS][MAX_TEXT_BUFFER_LENGTH] = { 0 };
+    static int  index = 0;
+    char *currentBuffer = buffers[index];
+    memset(currentBuffer, 0, MAX_TEXT_BUFFER_LENGTH);   // Clear buffer before using
+    va_list args;
+    va_start(args, text);
+    vsprintf(currentBuffer, text, args);
+    va_end(args);
+    index += 1;     // Move to next buffer for next function call
+    if (index >= MAX_TEXTFORMAT_BUFFERS) index = 0;
+
+    return currentBuffer;
+}
+
+	void updateCascades(const Mat4 & view, const Mat4 & proj,const Vec3 & lightPos)
+	{
+		float cascadeSplits[SHADOW_MAP_CASCADE_COUNT];
+     	float cascadeSplitLambda = 0.95f;
+
+        float nearClip = camera.getNearClip();
+		float farClip = camera.getFarClip();
+		float clipRange = farClip - nearClip;
+
+		float minZ = nearClip;
+		float maxZ = nearClip + clipRange;
+
+		float range = maxZ - minZ;
+		float ratio = maxZ / minZ;
+
+        for (u32 i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++)
+        {
+            float p = (i + 1) / static_cast<float>(SHADOW_MAP_CASCADE_COUNT);
+			float log = minZ * Pow(ratio, p);
+			float uniform = minZ + range * p;
+			float d = cascadeSplitLambda * (log - uniform) + uniform;
+			cascadeSplits[i] = (d - nearClip) / clipRange;
+        }
+	
+		// Calculate orthographic projection matrix for each cascade
+		float lastSplitDist = 0.0;
+		for (u32 i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) 
+        {
+			float splitDist = cascadeSplits[i];
+
+			Vec3 frustumCorners[8] = 
+            {
+				Vec3(-1.0f,  1.0f, 0.0f),
+				Vec3( 1.0f,  1.0f, 0.0f),
+				Vec3( 1.0f, -1.0f, 0.0f),
+				Vec3(-1.0f, -1.0f, 0.0f),
+				Vec3(-1.0f,  1.0f,  1.0f),
+				Vec3( 1.0f,  1.0f,  1.0f),
+				Vec3( 1.0f, -1.0f,  1.0f),
+				Vec3(-1.0f, -1.0f,  1.0f),
+			};
+
+			// Project frustum corners into world space
+			Mat4 invCam =Mat4::Inverse(proj * view);   
+			for (u32 j = 0; j < 8; j++) 
+            {
+				Vec4 invCorner = invCam * Vec4(frustumCorners[j], 1.0f);
+                Vec4 div = invCorner / invCorner.w;
+				frustumCorners[j] = Vec3(div.x, div.y, div.z);
+			}
+
+			for (u32 j = 0; j < 4; j++) 
+            {
+				Vec3 dist = frustumCorners[j + 4] - frustumCorners[j];
+				frustumCorners[j + 4] = frustumCorners[j] + (dist * splitDist);
+				frustumCorners[j] = frustumCorners[j] + (dist * lastSplitDist);
+			}
+
+			// Get frustum center
+			Vec3 frustumCenter = Vec3(0.0f);
+			for (u32 j = 0; j < 8; j++) 
+            {
+				frustumCenter += frustumCorners[j];
+			}
+			frustumCenter /= 8.0f;
+
+			float radius = 0.0f;
+			for (u32 j = 0; j < 8; j++) 
+            {
+				float distance = Vec3::Length(frustumCorners[j] - frustumCenter);
+				radius = Max(radius, distance);
+			}
+			radius = Ceil(radius * 16.0f) / 16.0f;
+
+			Vec3 maxExtents = Vec3(radius);
+			Vec3 minExtents = -maxExtents;
+
+			Vec3 lightDir = Vec3::Normalize(-lightPos);
+			Mat4 lightViewMatrix  = Mat4::LookAt(frustumCenter - lightDir * -minExtents.z, frustumCenter, Vec3(0.0f, 1.0f, 0.0f));
+			Mat4 lightOrthoMatrix = Mat4::Ortho(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, 0.0f, maxExtents.z - minExtents.z);
+
+
+      
+
+			// Store split distance and matrix in cascade
+			cascades[i].splitDepth = (camera.getNearClip() + splitDist * clipRange) * -1.0f;
+			cascades[i].viewProjMatrix = lightOrthoMatrix * lightViewMatrix;
+
+			lastSplitDist = cascadeSplits[i];
+		}
+	}
+
+int main()  
+{   
+
+
+    Modulos::Init();
+
+  
+
+    Device      *device = Device::InstancePtr();
+     
+
+
+   
+
+
+
+    RenderBatch batch;
+    
+    Shader      shader;
+    Shader      depthShader;
+    Shader      meshShader;
+
+    Font        font;
+
+
+    device->Create(screenWidth, screenHeight, "Hello World");
+
+    batch.Init(1,10124);
+
+    font.LoadDefaultFont();
+    font.SetBatch(&batch);
+
+{
+
+const char *vertexShaderSource = GLSL(
+        layout (location = 0) in vec3 aPos;
+
+    uniform mat4 lightSpaceMatrix;
+    uniform mat4 model;
+
+    void main()
+    {
+        gl_Position = lightSpaceMatrix * model * vec4(aPos, 1.0);
+    }
+    );
+
+const char *fragmentShaderSource = GLSL(
+
+
+    void main()
+    {             
+        //   gl_FragDepth = gl_FragCoord.z;
+    }
+);
+
+depthShader.Create(vertexShaderSource, fragmentShaderSource);
+depthShader.LoadDefaults();
+}
+
+{
+      const char* vShader = GLSL(
+        layout(location = 0) in vec3 position;
+        layout(location = 1) in vec2 texCoord;
+        layout(location = 2) in vec4 color;
+
+
+
+        uniform mat4 mvp;
+
+        out vec2 TexCoord;
+        out vec4 vertexColor;
+        void main()
+        {
+            gl_Position = mvp * vec4(position, 1.0);
+            TexCoord = texCoord;
+            vertexColor = color;
+        }
+        );
+
+
+        const char* fShader = GLSL(
+            in vec2 TexCoord;
+        out vec4 color;
+        in vec4 vertexColor;
+        uniform sampler2D texture0;
+        void main()
+        {
+            color = texture(texture0, TexCoord) * vertexColor;
+        }
+        );
+
+
+
+
+       
+    
+         shader.Create(vShader, fShader);
+         shader.LoadDefaults();
+}
+       
+
+
+
+  
+{
+     const char* vShader = GLSL(
+
+    layout (location = 0) in vec3 aPos;
+    layout (location = 1) in vec3 aNormal;
+    layout (location = 2) in vec2 aTexCoords;
+
+
+
+
+    out vec3 FragPos;
+    out vec3 Normal;
+    out vec2 TexCoords;
+
+    out vec3 outViewPosition;
+    out vec4 outWorldPosition;
+
+    uniform mat4 projection;
+    uniform mat4 view;
+    uniform mat4 model;
+
+
+    void main()
+    {
+        vec4 initPos = vec4(aPos, 1.0);
+
+        FragPos = vec3(model * initPos);
+        Normal = transpose(inverse(mat3(model))) * aNormal;
+        TexCoords = aTexCoords;
+      
+ 
+
+         mat4 modelViewMatrix = view * model;
+         vec4 mvPosition =  modelViewMatrix * initPos;
+         outViewPosition  = mvPosition.xyz;
+         outWorldPosition = model * initPos;
+
+        gl_Position = projection * view * model * initPos;
+    }
+
+     );
+
+      const char* fShader = GLSL(
+
+
+        const int DEBUG_SHADOWS = 1;;
+        const int NUM_CASCADES = 4;
+        const float BIAS = 0.0005;
+        const float SHADOW_FACTOR = 0.25;
+
+        out vec4 FragColor; 
+
+       
+        in    vec3 FragPos;
+        in    vec3 Normal;
+        in    vec2 TexCoords;
+      
+        in vec3 outViewPosition;
+        in vec4 outWorldPosition;
+
+        struct CascadeShadow 
+        {
+            mat4 projViewMatrix;
+            float splitDistance;
+        };
+
+
+
+        uniform sampler2D diffuseTexture;
+        uniform CascadeShadow cascadeshadows[NUM_CASCADES];
+        uniform sampler2D shadowMap[NUM_CASCADES];
+
+        uniform vec3 lightPos;
+        uniform vec3 viewPos;
+
+
+            float textureProj(vec4 shadowCoord, vec2 offset, int idx) 
+            {
+                float shadow = 1.0;
+
+                if (shadowCoord.z > -1.0 && shadowCoord.z < 1.0) 
+                {
+                    float dist = 0.0;
+                    dist = texture(shadowMap[idx], vec2(shadowCoord.xy + offset)).r;
+                    if (shadowCoord.w > 0 && dist < shadowCoord.z - BIAS) 
+                    {
+                        shadow = SHADOW_FACTOR;
+                    }
+                }
+                return shadow;
+             }
+
+             float calcShadow(vec4 worldPosition, int idx) 
+             {
+                vec4 shadowMapPosition = cascadeshadows[idx].projViewMatrix * worldPosition;
+                float shadow = 1.0;
+                vec4 shadowCoord = (shadowMapPosition / shadowMapPosition.w) * 0.5 + 0.5;
+                shadow = textureProj(shadowCoord, vec2(0, 0), idx);
+                return shadow;
+            }
+
+
+
+        void main()
+        {           
+            vec3 color = texture(diffuseTexture, TexCoords).rgb;
+            vec3 normal = normalize(Normal);
+            vec3 lightColor = vec3(0.8);
+            // ambient
+            vec3 ambient = 0.2 * lightColor;
+            // diffuse
+            vec3 lightDir = normalize(lightPos - FragPos);
+            float diff = max(dot(lightDir, normal), 0.0);
+            vec3 diffuse = diff * lightColor;
+            // specular
+            vec3 viewDir = normalize(viewPos - FragPos);
+            vec3 reflectDir = reflect(-lightDir, normal);
+            float spec = 0.0;
+            vec3 halfwayDir = normalize(lightDir + viewDir);  
+            spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
+            vec3 specular = spec * lightColor;    
+            // calculate shadow
+            
+             int cascadeIndex = 0;
+            for (int i=0; i<NUM_CASCADES - 1; i++) 
+            {
+                if (outViewPosition.z < cascadeshadows[i].splitDistance) 
+                {
+                    cascadeIndex = i + 1;
+                 }
+            }
+
+            float shadow = calcShadow(outWorldPosition, cascadeIndex);
+     
+
+            vec3 lighting = (ambient + diffuse + specular) * color;
+
+            lighting.rgb *= shadow;
+
+
+
+
+            //vec3 lighting = (ambient + (1.0 - shadow) * (diffuse + specular)) * color;    
+
+
+            
+            FragColor = vec4(lighting, 1.0);
+
+            if (DEBUG_SHADOWS == 1) 
+            {
+                switch (cascadeIndex) 
+                {
+                    case 0:
+                    FragColor.rgb *= vec3(1.0f, 0.25f, 0.25f);
+                    break;
+                    case 1:
+                    FragColor.rgb *= vec3(0.25f, 1.0f, 0.25f);
+                    break;
+                    case 2:
+                    FragColor.rgb *= vec3(0.25f, 0.25f, 1.0f);
+                    break;
+                    default :
+                    FragColor.rgb *= vec3(1.0f, 1.0f, 0.25f);
+                    break;
+                }
+             }
+        }
+      );
+
+      if (!meshShader.Create(vShader, fShader))
+      {
+          SDL_LogInfo(1, " Cant create: %s", "MeshShader");
+          return false;
+      }
+      meshShader.LoadDefaults();
+      meshShader.SetInt("diffuseTexture", 0);
+      meshShader.SetInt("shadowMap[0]", 1);
+      meshShader.SetInt("shadowMap[1]", 2);
+      meshShader.SetInt("shadowMap[2]", 3);
+      meshShader.SetInt("shadowMap[3]", 4);
+      
+
+
+}
+
+      VertexFormat::Element elements[] =
+    {
+        VertexFormat::Element(VertexFormat::POSITION, 3),
+        VertexFormat::Element(VertexFormat::NORMAL, 3),
+        VertexFormat::Element(VertexFormat::TEXCOORD0, 2),
+
+         
+    };     
+
+ 
+depthBuffer.Init(SHADOW_MAP_CASCADE_COUNT,SHADOW_WIDTH, SHADOW_HEIGHT);
+
+//MeshImporterOBJ importer;
+MeshImporterH3D importer;
+
+
+//       VertexFormat::Element elements[] =
+//     {
+//         VertexFormat::Element(VertexFormat::POSITION, 3),
+//         VertexFormat::Element(VertexFormat::TEXCOORD0, 2),
+//         VertexFormat::Element(VertexFormat::COLOR, 4)
+         
+//     };     
+
+ 
+
+   TextureManager::Instance().SetTexturePath("assets/");
+ //  TextureManager::Instance().SetTexturePath("assets/");
+   MeshBuilder::Instance().SetLoadPath("assets/mesh/h3d/");
+
+
+
+   Mesh* meshModel=  importer.Load(VertexFormat(elements, 3), "room.h3d");
+   if (!meshModel)
+   {
+  //  meshModel->SetMaterial(0, new TextureMaterial(TextureManager::Instance().Get("container.png")));
+    return 0;
+   }
+
+  TextureManager::Instance().SetTexturePath("assets/");
+
+
+    Mesh* cube = MeshBuilder::Instance().CreateCube(VertexFormat(elements, 3), 1,1,1);
+
+  ///   Mesh* cube = MeshBuilder::Instance().CreatePlane(VertexFormat(elements, 2), 10, 10, 10, 10);
+
+    cube->SetMaterial(0, new TextureMaterial(TextureManager::Instance().Load("container.png")));
+
+ 
+
+
+     
+    Driver::Instance().SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+
+    Vec3 lightPosition = Vec3(2.0f, 4.0f, -1.0f);
+       
+
+    while (device->Run())
+    {
+        float deltaTime =  device->GetFrameTime();
+
+        // lightPosition.x = sin((float)device->GetTime()) * 10.0f;
+        // lightPosition.z = cos((float)device->GetTime()) * 10.0f;
+        // lightPosition.y=4.0f;
+
+
+
+
+
+         if (Keyboard::Down(KEY_W))
+         {
+             camera.ProcessKeyboard(FORWARD, deltaTime);
+         } 
+         if (Keyboard::Down(KEY_S))
+         {
+             camera.ProcessKeyboard(BACKWARD, deltaTime);
+         }
+         if (Keyboard::Down(KEY_A))
+         {
+			 camera.ProcessKeyboard(LEFT, deltaTime);
+		 }
+    
+         if (Keyboard::Down(KEY_D))
+         {
+             camera.ProcessKeyboard(RIGHT, deltaTime);
+         }
+
+
+                 int xposIn, yposIn;
+                 u32 IsMouseDown = SDL_GetMouseState(&xposIn, &yposIn);
+
+
+                  if ( IsMouseDown & SDL_BUTTON(SDL_BUTTON_LEFT) )
+                  {
+
+                         
+                       
+                          float xpos = static_cast<float>(xposIn);
+                          float ypos = static_cast<float>(yposIn);
+
+                          if (firstMouse)
+                          {
+                              lastX = xpos;
+                              lastY = ypos;
+                              firstMouse = false;
+                          }
+
+                          float xoffset = xpos - lastX;
+                          float yoffset = lastY - ypos; 
+
+                          lastX = xpos;
+                          lastY = ypos;
+
+                       camera.ProcessMouseMovement(xoffset, yoffset);
+
+
+                  }
+                  else
+                  {
+                      firstMouse = true;
+                  }
+
+        Mat4 model = Mat4::Identity();
+        Mat4 proj = camera.GetProjectionMatrix((float)screenWidth / (float)screenHeight) ;
+        Mat4 view = camera.GetViewMatrix();
+        Vec3 cameraPosition = camera.position;
+
+        updateCascades(view, proj, lightPosition);
+       
+
+ 
+   
+
+        Mat4 lightProjection;
+        Mat4 lightView;
+        Mat4 lightSpaceMatrix;
+        float near_plane = 1.0f, far_plane = 7.5f;
+
+
+        lightProjection=Mat4::Ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+        lightView = Mat4::LookAt(lightPosition, Vec3(0.0f), Vec3(0.0f, 1.0f, 0.0f));
+        //lightSpaceMatrix = lightProjection * lightView;
+     
+
+        Driver::Instance().SetClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        Driver::Instance().SetBlend(false);
+        Driver::Instance().SetDepthTest(true);
+
+
+        depthShader.Use();
+        depthShader.SetMatrix4("model", &model.c[0][0]);
+        
+
+
+        depthBuffer.Begin();
+
+            for (u32 j = 0; j < SHADOW_MAP_CASCADE_COUNT; j++)
+            {
+
+                depthBuffer.Set(j);
+                lightSpaceMatrix = cascades[j].viewProjMatrix;
+                depthShader.SetMatrix4("lightSpaceMatrix", &lightSpaceMatrix.c[0][0]);
+                for (u32 i=0; i<15; i++)
+                {
+                model = Mat4::Translate(-15+i * 10.0f,0,0);
+                depthShader.SetMatrix4("model", &model.c[0][0]);
+                meshModel->Render(&depthShader);
+                }
+            }
+
+
+
+        depthBuffer.End();
+
+        
+        
+        
+        
+        Driver::Instance().SetClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        Driver::Instance().Clear();
+        Driver::Instance().SetBlend(true);
+        Driver::Instance().SetBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        Driver::Instance().SetDepthTest(true);
+
+
+
+         meshShader.Use();
+
+
+  
+      
+
+  
+
+        meshShader.SetFloat("lightPos", lightPosition.x, lightPosition.y, lightPosition.z);
+        meshShader.SetFloat("viewPos", cameraPosition.x, cameraPosition.y, cameraPosition.z);
+        meshShader.SetMatrix4("model", &model.c[0][0]);
+        meshShader.SetMatrix4("view", &view.c[0][0]);
+        meshShader.SetMatrix4("projection", &proj.c[0][0]);
+        meshShader.SetInt("diffuseTexture", 0);
+        meshShader.SetInt("shadowMap[0]", 1);
+        meshShader.SetInt("shadowMap[1]", 2);
+        meshShader.SetInt("shadowMap[2]", 3);
+        meshShader.SetInt("shadowMap[3]", 4);
+
+       
+        for (u32 i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++)
+        {
+            meshShader.SetMatrix4(TextFormat("cascadeshadows[%d].projViewMatrix", i), &cascades[i].viewProjMatrix.c[0][0]);
+            meshShader.SetFloat(TextFormat("cascadeshadows[%d].splitDistance", i), cascades[i].splitDepth);
+               
+        }
+        depthBuffer.BindTexture(1);
+
+        screenWidth = Driver::Instance().GetWidth();
+        screenHeight = Driver::Instance().GetHeight();
+
+      
+
+        Driver::Instance().SetViewport(0, 0, screenWidth, screenHeight);
+
+
+
+        cube->Render(&meshShader);
+
+
+
+        for (u32 i=0; i<15; i++)
+        {
+        model = Mat4::Translate(-15+i * 10.0f,0,0);
+        meshShader.SetMatrix4("model", &model.c[0][0]);
+        meshModel->Render(&meshShader);
+        }
+
+        Driver::Instance().SetTextureId(0, 0);
+
+
+
+
+   
+        shader.Use();
+        Mat4 mvp;
+
+        Mat4 transfom=Mat4::Identity() * proj * view ; 
+        shader.SetMatrix4("mvp", &transfom.c[0][0]);
+
+
+        batch.Grid(10,10);
+        batch.Render();
+
+
+
+        mvp = Mat4::Ortho(0.0f, screenWidth, screenHeight,0.0f, -5.0f, 5.0f);
+        shader.Use();
+        shader.SetMatrix4("mvp", &mvp.c[0][0]);
+
+
+   
+
+        Driver::Instance().SetBlend(true);
+        Driver::Instance().SetBlendMode(BlendMode::BLEND);
+        Driver::Instance().SetDepthTest(false);
+      //  Driver::Instance().SetDepthWrite(false);
+    //    Driver::Instance().SetCullFace(false);
+        
+
+        batch.SetColor(255, 255, 255, 255);
+
+               
+        batch.Quad(depthBuffer.textures[0], 0.0f, 0.0f, 255,255);
+
+
+        font.Print(10, 10, "Hello World");
+
+
+        batch.Render();
+
+
+
+        device->Flip();
+    }
+
+
+    depthBuffer.Release();
+
+    cube->Drop();
+    meshModel->Drop();
+
+    font.Release();
+    batch.Release();
+    shader.Release();
+   /// device.Close();
+  
+
+    Modulos::Release();
+    
+ 
+
+    return 0;
+}
