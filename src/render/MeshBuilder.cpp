@@ -43,7 +43,10 @@ String MeshBuilder::GetLoadPath() const
 
 MeshBuilder::~MeshBuilder()
 {
-  
+    for (u32 i = 0; i < m_meshes.size(); ++i)
+    {
+        m_meshes[i]->Drop();
+    }
 
     instance = nullptr;
     LogInfo("[MESHBUILDER] destroyed");
@@ -53,6 +56,7 @@ MeshBuilder::~MeshBuilder()
 Mesh* MeshBuilder::CreateCube(const VertexFormat& vertexFormat,float width, float height, float length)
 {
     Mesh *mesh = new Mesh(vertexFormat);
+    m_meshes.push_back(mesh);
 
    
      width /= 2;
@@ -212,6 +216,7 @@ Mesh * MeshBuilder::CreatePlane(const VertexFormat& vertexFormat,int stacks, int
 {
 
      Mesh *mesh = new Mesh(vertexFormat);
+     m_meshes.push_back(mesh);
     
     Surface *surface = mesh->AddSurface(0);
   
@@ -280,6 +285,7 @@ Mesh *MeshBuilder::CreateCylinder(const VertexFormat& vertexFormat,int stacks, i
 
   
      Mesh *mesh = new Mesh(vertexFormat);
+     m_meshes.push_back(mesh);
     
     Surface *surface = mesh->AddSurface(0);
 
@@ -364,6 +370,7 @@ Mesh *MeshBuilder::CreateSphere(const VertexFormat& vertexFormat,int stacks, int
 {
      
      Mesh *mesh = new Mesh(vertexFormat);
+     m_meshes.push_back(mesh);
     
     Surface *surface = mesh->AddSurface(0);
           const float pi = 3.14159265359f;
@@ -419,6 +426,7 @@ Mesh *MeshBuilder::CreateCone(const VertexFormat& vertexFormat,int stacks, int s
 
   
      Mesh *mesh = new Mesh(vertexFormat);
+     m_meshes.push_back(mesh);
     
     Surface *surface = mesh->AddSurface(0);
     const float pi = 3.14159265359f;
@@ -505,6 +513,7 @@ Mesh *MeshBuilder::CreateTorus(const VertexFormat& vertexFormat,int stacks, int 
 
    
      Mesh *mesh = new Mesh(vertexFormat);
+     m_meshes.push_back(mesh);
     
     Surface *surface = mesh->AddSurface(0);
 
@@ -565,6 +574,7 @@ Mesh* MeshBuilder::CreateHillsPlane(const VertexFormat& vertexFormat,
     const FloatSize& textureRepeatCount)
 {
     Mesh* mesh = new Mesh(vertexFormat);
+    m_meshes.push_back(mesh);
 
     Surface* surface = mesh->AddSurface(0);
 
@@ -648,6 +658,7 @@ Mesh *MeshBuilder::CreateTerrain(const VertexFormat& vertexFormat, Pixmap &heigh
 
 {
    Mesh *mesh = new Mesh(vertexFormat);
+   m_meshes.push_back(mesh);
 
    	const s32 borderSkip =1;
     

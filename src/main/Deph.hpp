@@ -82,7 +82,7 @@ class TextureCascade
         m_textures = new u32[count];
         glGenTextures(count, m_textures);
 
-        for (int i = 0; i < count; i++)
+        for (u32 i = 0; i < count; i++)
         {
             glBindTexture(GL_TEXTURE_2D, m_textures[i]);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
@@ -98,7 +98,7 @@ class TextureCascade
 
     void Bind(u32 start)
     {
-        for (int i = 0; i < m_count; i++)
+        for (u32 i = 0; i < m_count; i++)
         {
             glActiveTexture(GL_TEXTURE0 + start + i);
             glBindTexture(GL_TEXTURE_2D, m_textures[i]);
@@ -117,7 +117,7 @@ class TextureCascade
 
     void Release()
     {
-       for (int i = 0; i < m_count; i++)
+       for (u32 i = 0; i < m_count; i++)
         {
             glDeleteTextures(1, &m_textures[i]);
         }

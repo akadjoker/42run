@@ -53,6 +53,7 @@ private:
     static MeshBuilder* instance;
     String m_loadPath;
     String m_texturePath;
+    Array<Mesh*> m_meshes;
 
 
 

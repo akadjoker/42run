@@ -286,6 +286,7 @@ private:
     {
         this->buffers.push_back(buffer);
     }
+    void pack();
 private:
     friend class Mesh;  
     friend class MeshBuffer;
@@ -364,6 +365,82 @@ class  CORE_PUBLIC   Mesh : public Ref
     VertexFormat  m_vertexFormat;
     bool m_dynamic = false;
     BoundingBox m_boundingBox;
+
+
+};
+
+
+
+struct  CORE_PUBLIC MeshJoint 
+{
+    String name;
+    String parent;
+    Mat4 transform;
+    Vec3 position;
+    Vec3 scale;
+    Quaternion rotation;
+    MeshJoint()
+    {
+        name = "";
+        parent = "";
+    }
+};
+
+struct VertexBone
+{
+    u32 index;
+    float weight;
+
+    VertexBone() 
+    {
+        this->index = 0;
+        this->weight = 0.0f;
+    }
+    VertexBone(u32 index, float weight)
+    {
+        this->index = index;
+        this->weight = weight;
+    }
+};
+
+
+class  CORE_PUBLIC   AnimatedMesh : public Ref
+{
+    public:
+        AnimatedMesh(const VertexFormat& vertexFormat);
+        ~AnimatedMesh();
+
+        u32        GetJointCount() const { return (u32)m_joints.size(); }
+        MeshJoint *GetJoint(u32 index);
+
+        int       AddMaterial(Material *material);
+        Material *GetMaterial(u32 index);
+        void      SetMaterial(u32 index, Material *material);
+        u32       GetMaterialCount() const { return (u32)m_materials.size(); }
+
+        u32      GetSurfaceCount() const  { return (u32) m_surfaces.size(); }
+        Surface *GetSurface(u32 index);
+
+
+    private:
+        friend class MeshImporter;
+        friend class MeshBuilder;
+
+        
+        struct SubMesh
+        {
+            Surface *surface;
+            Array<VertexBone> m_bones;
+        };
+
+        Array<SubMesh*>   m_surfaces;
+        Array<MeshJoint*> m_joints;
+        Array<Material*> m_materials;
+        VertexFormat     m_vertexFormat;
+        BoundingBox      m_boundingBox;
+
+        SubMesh   *AddSubMesh(u32 material=0);
+        MeshJoint *AddJoint();
 
 
 };

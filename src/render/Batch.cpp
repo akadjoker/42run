@@ -1060,7 +1060,7 @@ void  RenderBatch::Quad(u32 texture, float x, float y,float width, float height)
 
 
 
-   // SetTexture(texture);
+    SetTexture(texture);
     
 
     

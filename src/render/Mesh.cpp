@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Mesh.hpp"
 
 
 
@@ -234,7 +235,7 @@ Mesh::Mesh(const VertexFormat& vertexFormat,bool dynamic):Ref(),m_vertexFormat(v
 
 Mesh::~Mesh()
 {
-   
+    LogInfo( "DESTROYED: Mesh");
     Release();
 }
 
@@ -293,7 +294,7 @@ void Mesh::Release()
 
     for (u32 i = 0; i < m_surfaces.size(); i++) 
     {
-     //   printf("Release Surface %d\n",i);
+        //printf("Release Surface %d\n",i);
         delete m_surfaces[i];
     }
 
@@ -462,6 +463,7 @@ void Surface::Init()
     glGenBuffers(1, &IBO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
     isDirty = true;
+    pack();
 
 
      for (u32 j = 0; j <m_vertexFormat.getElementCount(); ++j)
@@ -1016,6 +1018,15 @@ void Surface::Clear()
     m_boundingBox.Clear();
 }
 
+void Surface::pack()
+{
+    positions.compact();
+    normals.compact();
+    texCoords.compact();
+    indices.compact();
+    colors.compact();
+
+}
 void Surface::CalculateSmothNormals(bool angleWeighted)
 {
 
@@ -1127,3 +1138,82 @@ void Surface::CalculateBoundingBox()
  }
 
 //***********************************************************************************************************
+
+
+ AnimatedMesh::AnimatedMesh(const VertexFormat &vertexFormat):Ref(),m_vertexFormat(vertexFormat)
+ {
+     setDebugName("AnimatedMesh");
+ }
+
+ AnimatedMesh::~AnimatedMesh()
+ {
+
+    for (u32 i = 0; i < m_joints.size(); ++i) 
+    {
+        delete m_joints[i];
+    }
+
+    for (u32 i = 0; i < m_materials.size(); ++i) 
+    {
+        delete m_materials[i];
+    }
+
+    for (u32 i = 0; i < m_surfaces.size(); ++i) 
+    {
+        delete m_surfaces[i]->surface;
+        delete m_surfaces[i];
+    }  
+ }
+
+ static s32 CompareBones(VertexBone *a, VertexBone *b)
+{
+    return a->weight > b->weight;
+}
+
+ int AnimatedMesh::AddMaterial(Material *material)
+ {
+
+     m_materials.push_back(material);
+     return (int)m_materials.size() - 1;
+ }
+
+ Material *AnimatedMesh::GetMaterial(u32 index)
+ {
+     if (GetMaterialCount() == 0) 
+     {
+         return nullptr;
+     }
+     DEBUG_BREAK_IF(index >= m_materials.size());
+     return m_materials[index];
+ }
+
+ void AnimatedMesh::SetMaterial(u32 index, Material *material)
+ {
+     DEBUG_BREAK_IF(index >= m_materials.size());
+     if (m_materials[index] != nullptr) 
+     {
+         delete m_materials[index];
+     }
+     m_materials[index] = material;
+ }
+
+ Surface *AnimatedMesh::GetSurface(u32 index)
+ {
+     DEBUG_BREAK_IF(index >= m_surfaces.size());
+     return m_surfaces[index]->surface;
+ }
+
+ AnimatedMesh::SubMesh *AnimatedMesh::AddSubMesh(u32 material)
+ {
+     SubMesh *mesh = new SubMesh();
+     mesh->surface= new Surface(m_vertexFormat, material, true);
+     m_surfaces.push_back(mesh);
+     return mesh;
+ }
+
+ MeshJoint *AnimatedMesh::AddJoint()
+ {
+     MeshJoint *joint = new MeshJoint();
+     m_joints.push_back(joint);
+     return joint;
+ }

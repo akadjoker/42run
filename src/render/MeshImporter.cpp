@@ -471,7 +471,7 @@ void MeshImporterOBJ::pushVertex(unsigned int v, unsigned int vt, unsigned int v
             // Log(0, "Material %s base %s numTextures %d", name.c_str(), base.c_str(), numTextures);
         for (int i = 0; i < numMaterial; i++)
         {
-            int flags = stream.ReadInt();
+             stream.ReadInt();//flags
             String name=stream.ReadUTFString();
             String textureName=stream.ReadUTFString();
             LogInfo( "Material (%s) texture (%s)", name.c_str(), textureName.c_str());

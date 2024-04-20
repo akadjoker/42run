@@ -21,7 +21,7 @@ float lastY = screenHeight / 2.0f;
 float mouseDeltaX = 0.0f;
 float mouseDeltaY = 0.0f;
 bool firstMouse = true;
-bool IsMouseDown = false;
+bool IsMouseDown = false; 
 
 CascadeShadow depthBuffer;
   
@@ -52,70 +52,6 @@ Cascade cascades[SHADOW_MAP_CASCADE_COUNT];
 int main()  
 {   
 
-//     GameObject obj;
-
-//     obj.AddComponent<MeshRenderer>();
-//     obj.AddComponent<MeshRenderer>();
-//     obj.AddComponent<MeshRenderer>();
-    
-
-//     if (obj.HasComponent<MeshRenderer>())
-//     {
-//             LogInfo("Has Component");
-//     } else 
-//     {
-//         LogInfo("No Component");    
-//     }
-
-//      MeshRenderer *meshRenderer = obj.GetComponent<MeshRenderer>();
-//      meshRenderer->Load();
-
-//      obj.RemoveComponent<MeshRenderer>();
-
-//       if (obj.HasComponent<MeshRenderer>())
-//     {
-//             LogInfo("Has Component");
-//     } else 
-//     {
-//         LogInfo("No Component");    
-//     }
-
-
-//      meshRenderer = obj.GetComponent<MeshRenderer>();
-
-
-//      HashTable<int> hashTable;
-
-// // Adicione alguns elementos à tabela de hash
-// hashTable.insert("key1", 10);
-// hashTable.insert("key2", 20); 
-// hashTable.insert("key3", 30);
-
-// for (auto it = hashTable.begin(); it != hashTable.end(); ++it) 
-// {
-
-//         LogInfo("Key: %s, ", it.key()); 
-// }       
-
-// auto it = hashTable.find("key2");
-// if (it != hashTable.end())
-// {
-   
-   
-//     it.erase();
-//    LogInfo("Element removed successfully!");
-// } else 
-// {
-//    LogInfo("Element not found in the hash table.");
-// }
-
-// for (auto it = hashTable.begin(); it != hashTable.end(); ++it) 
-// {
-
-//         LogInfo("Key: %s, ", it.key()); 
-// }
-
-// return 0;
 
     Modulos::Init();
 
@@ -302,12 +238,27 @@ MeshImporterH3D importer;
     // colors.Load("assets/terrain-texture.jpg");
     // height.Load("assets/terrain-heightmap.bmp");
     
+    Mesh *plane = MeshBuilder::Instance().CreatePlane(VertexFormat(elements, 2), 10, 10, 10, 10);
 
-    Mesh* cube =MeshBuilder::Instance().CreatePlane(VertexFormat(elements, 2), 5, 5, 50, 50);
-
-  //  Mesh * cube = MeshBuilder::Instance().CreateCube(VertexFormat(elements, 2), 1,1,1);
+    Mesh * cube = MeshBuilder::Instance().CreateCube(VertexFormat(elements, 2),1,1,1);
+    Mesh * sphere = MeshBuilder::Instance().CreateSphere(VertexFormat(elements, 2), 32, 32);
        
-    cube->SetMaterial(0, new TextureMaterial(TextureManager::Instance().Load("dirt.png")));
+    plane->SetMaterial(0, new TextureMaterial(TextureManager::Instance().Load("dirt.png")));
+    cube->SetMaterial(0, new TextureMaterial(TextureManager::Instance().Load("brick.png")));
+    sphere->SetMaterial(0, new TextureMaterial(TextureManager::Instance().Load("container.png")));
+
+    Scene *scene = new Scene();
+
+    scene->CreateMeshNode(plane);
+    
+    
+    
+    SceneNode *node = scene->CreateMeshNode(cube);
+    node->SetPosition(0,1,0);
+
+    SceneNode *child = scene->CreateMeshNode(sphere,node);
+    child->SetPosition(2,1,0);
+
     
     // Mesh* cube =MeshBuilder::Instance().CreateTerrain(VertexFormat(elements, 3),height,colors, FloatSize(0.1f,0.1f),0.0f,IntSize(256,256));
     //MeshBuilder::Instance().CreateCube(VertexFormat(elements, 3), 1,1,1);
@@ -332,6 +283,7 @@ MeshImporterH3D importer;
     while (device->Run())
     {
         float deltaTime =  device->GetFrameTime() * 0.5f;
+        u32 currentTime = device->GetTicks();
 
         if (Keyboard::Down(KEY_SPACE))
         {
@@ -453,15 +405,22 @@ MeshImporterH3D importer;
         meshShader.SetMatrix4("projection", &proj.c[0][0]);
         meshShader.SetInt("diffuseTexture", 0);
     
+ 
 
-
-
+       node->SetRotation(currentTime * 0.1f, 0.0f,currentTime * 0.1f);
+       child->SetRotation(currentTime * 0.1f,currentTime * 0.1f,currentTime * 0.01f);
         
 
 
         model = Mat4::Identity();
         meshShader.SetMatrix4("model", &model.c[0][0]);
-        cube->Render(&meshShader); 
+
+        scene->Update(currentTime);
+        scene->Render(&meshShader);
+
+        // plane->Render(&meshShader);
+        // cube->Render(&meshShader); 
+
        
 
 
@@ -505,13 +464,13 @@ MeshImporterH3D importer;
     }
 
 
-    cube->Drop();
+    scene->Release();
 
 
     font.Release();
     batch.Release();
     shader.Release();
-   /// device.Close();
+
   
 
     Modulos::Release();

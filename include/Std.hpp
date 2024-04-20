@@ -218,11 +218,11 @@ public:
   
 
 
-    Array() :data(0), used(0), allocated(0), is_sorted(true) {}
+    Array() :data(0), used(0), allocated(0), is_sorted(true), safeResize(false) {}
 
     Array(const Array<T, TAlloc>& other) : data(0)	{		*this = other;	}
 
-    Array(u32 size) :data(0), used(0), allocated(0), is_sorted(true)    {       allocate(size);    }
+    Array(u32 size) :data(0), used(0), allocated(0), is_sorted(true), safeResize(false)    {       allocate(size);    }
 
     ~Array()    {        clear();    }
 
@@ -280,6 +280,7 @@ public:
 
 		is_sorted = other.is_sorted;
 		allocated = other.allocated;
+        safeResize = other.safeResize;
 
 		for (u32 i=0; i<other.used; ++i)
 			allocator.construct(&data[i], other.data[i]); 
@@ -295,6 +296,9 @@ public:
             
         if (allocated != other.allocated)
             return false;
+
+        if (safeResize == other.safeResize)
+            return true;
        
         if (is_sorted != other.is_sorted)
             return false;
@@ -308,13 +312,24 @@ public:
 
 	void insert(const T& element, u32 index=0)
 	{
-		DEBUG_BREAK_IF(index > used) // access violation
+		DEBUG_BREAK_IF(index > used) 
 
 		if (used + 1 > allocated)
 		{
 			const T e(element);
 
-			u32 newAlloc = (allocated == 0) ? 1 : allocated * 2;
+			u32 newAlloc;
+            if (safeResize)
+            {
+
+                newAlloc = used + 2;
+
+            } else 
+            {
+                newAlloc = used + 1 + (allocated < 500 ?
+							(allocated < 5 ? 5 : used) : used >> 2);
+            }
+            
 
 
 			
@@ -337,20 +352,20 @@ public:
 
 			if ( used > index )
 			{
-				// create one new element at the end
+
 				allocator.construct(&data[used], data[used-1]);
 
-				// move the rest of the array content
+		
 				for (u32 i=used-1; i>index; --i)
 				{
 					data[i] = data[i-1];
 				}
-				// insert the new element
+		
 				data[index] = element;
 			}
 			else
 			{
-				// insert the new element to the end
+		
 				allocator.construct(&data[index], element);
 			}
 		}
@@ -494,6 +509,7 @@ private:
     u32 used;//o que estamos usar "cursor"
     u32 allocated; // o que temos alocado
     bool is_sorted;
+    bool safeResize;
     TAlloc allocator;
 
 
